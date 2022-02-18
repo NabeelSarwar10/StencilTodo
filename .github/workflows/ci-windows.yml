@@ -1,0 +1,46 @@
+name: CI
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  ci:
+    runs-on: windows-2019
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 3
+      - name: Get origin master
+        run: |
+          git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+      - uses: actions/cache@v1
+        id: workspace-cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-${{ matrix.node-version }}-workspace-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.node-version }}-workspace-
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build
+        if: github.event_name == 'push'
+        run: yarn nx build --prod --with-Deps
+      - name: Run Build on PR
+        if: github.event_name == 'pull_request'
+        run: yarn build ui-components --base=origin/master --head=HEAD
+      - name: Test
+        if: github.event_name == 'push'
+        run: yarn test
+      - name: Run Test on PR
+        if: github.event_name == 'pull_request'
+        run: yarn test ui-components --base=origin/master --head=HEAD
+
